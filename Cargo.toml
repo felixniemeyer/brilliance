@@ -1,0 +1,10 @@
+[package]
+name = "brilliance"
+version = "0.1.0"
+authors = ["Felix Niemeyer <niemeyer.felix@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+vulkano = "0.16"
+vulkano-shaders = "0.16"
+rand = "^0.7.2"
