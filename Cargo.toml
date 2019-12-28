@@ -7,4 +7,10 @@ edition = "2018"
 [dependencies]
 vulkano = "0.16"
 vulkano-shaders = "0.16"
+vulkano-win = "0.16"
+
+image = "^0.21"
+
 rand = "^0.7.2"
+winit = "0.19.5"
+
