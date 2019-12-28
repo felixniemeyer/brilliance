@@ -1,3 +1,5 @@
+use std::time; 
+
 use vulkano::instance::Instance;
 
 use vulkano::instance::PhysicalDevice;
@@ -18,6 +20,13 @@ use vulkano::framebuffer::{
 
 use vulkano::image::SwapchainImage; 
 
+use vulkano::sampler::{
+    Sampler, 
+    SamplerAddressMode, 
+    Filter, 
+    MipmapMode
+};
+
 use vulkano::buffer::BufferUsage;
 use vulkano::buffer::CpuAccessibleBuffer;
 
@@ -29,7 +38,7 @@ use vulkano::command_buffer::{
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 
 use std::sync::Arc;
-use vulkano::pipeline::ComputePipeline;
+// use vulkano::pipeline::ComputePipeline;
 
 use vulkano::sync; 
 use vulkano::sync::{
@@ -40,20 +49,17 @@ use vulkano::sync::{
 use vulkano::format::Format; 
 use vulkano::image::{
     Dimensions, 
-    StorageImage, 
     ImmutableImage, 
 };
 
-use vulkano::format::ClearValue; 
 
-use rand::{
-    thread_rng, 
-    Rng
-};
+// use rand::{
+//     thread_rng, 
+//     Rng
+// };
 
 use image::{
     GenericImageView, 
-    DynamicImage, 
 };
 
 use vulkano_win::VkSurfaceBuild; 
@@ -77,11 +83,9 @@ use vulkano::swapchain::{
 mod cs {
     vulkano_shaders::shader! {
         ty: "compute",
-        path: "./src/shader/compute/particle-update.glsl"
+        path: "./src/shader/particle_update.cp.glsl"
     }
 }
-
-const PARTICLE_COUNT: usize = 2048;
 
 #[derive(Copy, Clone, Debug)]
 struct Particle {
@@ -140,13 +144,9 @@ fn main() {
     {   // stdout image info
         println!("color {:?}", img.color()); 
         println!("dimensions {:?}", img.dimensions()); 
-        println!("first pixel {:?}", img.pixels().next().unwrap()); 
+     //   println!("first pixel {:?}", img.pixels().next().unwrap()); 
 
-        println!("first pixel {:?}", img.pixels().next().map(|item| item.2).unwrap()); 
-
-        img.as_bgr8().into_iter().for_each(|item| {
-           println!("yey: {:?}", item);
-        }); 
+    //    println!("first pixel {:?}", img.pixels().next().map(|item| item.2).unwrap()); 
     }
 
 
@@ -190,45 +190,32 @@ fn main() {
 
     let queue = queues.next().unwrap();
 
-    let particles = init_particles_buffer();
-    let particles_buffer =
-        CpuAccessibleBuffer::from_data(device.clone(), BufferUsage::all(), particles)
-            .expect("failed to create buffer");
+    // let particles = init_particles_buffer();
+    // let particles_buffer =
+    //     CpuAccessibleBuffer::from_data(device.clone(), BufferUsage::all(), particles)
+    //         .expect("failed to create buffer");
 
 
-    let shader = cs::Shader::load(device.clone()).expect("failed to create shader module");
-    let compute_pipeline = Arc::new(
-        ComputePipeline::new(device.clone(), &shader.main_entry_point(), &())
-            .expect("failed to create compute pipeline"),
-    );
+    // let shader = cs::Shader::load(device.clone()).expect("failed to create shader module");
+    // let compute_pipeline = Arc::new(
+    //     ComputePipeline::new(device.clone(), &shader.main_entry_point(), &())
+    //         .expect("failed to create compute pipeline"),
+    // );
 
-    let set = Arc::new(
-        PersistentDescriptorSet::start(compute_pipeline.clone(), 0)
-            .add_buffer(particles_buffer.clone())
-            .unwrap()
-            .build()
-            .unwrap(),
-    );
+    // let set = Arc::new(
+    //     PersistentDescriptorSet::start(compute_pipeline.clone(), 0)
+    //         .add_buffer(particles_buffer.clone())
+    //         .unwrap()
+    //         .build()
+    //         .unwrap(),
+    // );
 
-    let command_buffer = AutoCommandBufferBuilder::new(device.clone(), queue.family())
-        .unwrap()
-        .dispatch([PARTICLE_COUNT as u32 / 32, 1, 1], compute_pipeline.clone(), set.clone(), ())
-        .unwrap()
-        .build()
-        .unwrap();
-
-    let image = StorageImage::new(
-        device.clone(), 
-        Dimensions::Dim2d { width: 1024, height: 1024 },
-        Format::R8G8B8A8Unorm, 
-        Some(queue.family()))
-        .unwrap(); 
-
-    let clear_command = AutoCommandBufferBuilder::new(device.clone(), queue.family())
-        .unwrap()
-        .clear_color_image(image.clone(), ClearValue::Float([0.0, 0.0, 1.0, 1.0]))
-        .unwrap()
-        .build().unwrap();
+    // let command_buffer = AutoCommandBufferBuilder::new(device.clone(), queue.family())
+    //     .unwrap()
+    //     .dispatch([PARTICLE_COUNT as u32 / 32, 1, 1], compute_pipeline.clone(), set.clone(), ())
+    //     .unwrap()
+    //     .build()
+    //     .unwrap();
 
     let mut events_loop = EventsLoop::new(); 
     let surface = WindowBuilder::new().build_vk_surface(&events_loop, instance.clone()).unwrap();
@@ -241,6 +228,7 @@ fn main() {
         let usage = caps.supported_usage_flags; 
         let alpha = caps.supported_composite_alpha.iter().next().unwrap(); 
         let format = caps.supported_formats[0].0;
+        caps.supported_formats.iter().for_each(|sth| println!("{:?}", sth)); 
 
         let initial_dimensions = if let Some(dimensions) = window.get_inner_size() {
             let dimensions: (u32, u32) = dimensions.to_physical(window.get_hidpi_factor()).into();
@@ -274,29 +262,35 @@ fn main() {
 
     // texture
     let img_dim = img.dimensions();
-    let autumn_texture = ImmutableImage::from_iter(
-        img.to_rgba().pixels().map(|rgba| {
+    let (autumn_texture, autumn_texture_future) = match ImmutableImage::from_iter(
+        img.as_rgba8().unwrap().pixels().map(|rgba| {
             let bytes : [u8; 4] = [rgba[0], rgba[1], rgba[2], rgba[3]]; 
             bytes
         }),
         Dimensions::Dim2d { width: img_dim.0, height: img_dim.1 },
         Format::R8G8B8A8Unorm, 
-        queue.clone()
-    )
-    .unwrap();
 
+        queue.clone()
+    ) {
+        Ok(i) => i, 
+        Err(err) => panic!("{:?}", err)
+    };
+
+    let sampler = Sampler::new(device.clone(), Filter::Linear, Filter::Linear, 
+        MipmapMode::Nearest, SamplerAddressMode::Repeat, SamplerAddressMode::Repeat, 
+        SamplerAddressMode::Repeat, 0.0, 1.0, 0.0, 0.0).unwrap(); 
 
     mod square_vs { 
         vulkano_shaders::shader!{
             ty: "vertex", 
-            path: "./src/shader/compute/square_vs.glsl"
+            path: "./src/shader/square.vs.glsl"
         }
     }
 
     mod square_fs { 
         vulkano_shaders::shader!{
             ty: "fragment", 
-            path: "./src/shader/compute/square_fs.glsl"
+            path: "./src/shader/square.fs.glsl"
         }
     }
 
@@ -325,9 +319,15 @@ fn main() {
         .triangle_list()
         .viewports_dynamic_scissors_irrelevant(1)
         .fragment_shader(square_fs.main_entry_point(), ())
+        .blend_alpha_blending()
         .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
         .build(device.clone())
         .unwrap()); 
+
+    let set = Arc::new(PersistentDescriptorSet::start(pipeline.clone(), 0)
+        .add_sampled_image(autumn_texture.clone(), sampler.clone()).unwrap()
+        .build().unwrap()
+    );
 
     let mut dynamic_state = DynamicState { 
         line_width: None, 
@@ -343,7 +343,9 @@ fn main() {
 
     let mut recreate_swapchain = false; 
 
-    let mut previous_frame_end = Box::new(sync::now(device.clone())) as Box<dyn GpuFuture>; 
+    let mut previous_frame_end = Box::new(sync::now(device.clone()).join(autumn_texture_future)) as Box<dyn GpuFuture>; 
+
+    let t0 = time::SystemTime::now(); 
 
     loop {
         previous_frame_end.cleanup_finished(); 
@@ -361,8 +363,6 @@ fn main() {
                 Err(SwapchainCreationError::UnsupportedDimensions) => continue, 
                 Err(err) => panic!("{:?}", err)
             }; 
-
-            println!("recreated swapchain");
 
             swapchain = new_swapchain; 
 
@@ -384,19 +384,27 @@ fn main() {
             continue; 
         } // ugly workaround for a situation when image_num is out of bounds
 
+        let push_constants = square_fs::ty::PushConstantData {
+            time: time::SystemTime::now().duration_since(t0).unwrap().as_millis() as i32
+        };
 
-        let clear_values = vec!([0.0, 0.0, 1.0, 1.0].into()); 
-
-        let command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(device.clone(), queue.family()).unwrap()
+        let clear_values = vec!([0.0, 0.0, 0.0, 1.0].into()); 
+        let command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(
+            device.clone(), 
+            queue.family()
+        )
+            .unwrap()
             .begin_render_pass(framebuffers[image_num].clone(), false, clear_values)
             .unwrap()
-
-            .draw(pipeline.clone(), &dynamic_state, vertex_buffer.clone(), (), ())
+            .draw(
+                pipeline.clone(), 
+                &dynamic_state, 
+                vertex_buffer.clone(), 
+                set.clone(), 
+                push_constants)
             .unwrap()
-
             .end_render_pass()
             .unwrap()
-
             .build()
             .unwrap();
 
@@ -433,22 +441,22 @@ fn main() {
     }
 }
 
-fn init_particles_buffer() -> [Particle; PARTICLE_COUNT] {
-    let mut rng = thread_rng();
-    let mut particles = [Particle {
-        pos: [0.0, 0.0],
-        tail: [0.0, 0.0],
-        speed: [0.0, 0.0],
-        prev_pos: [0.0, 0.0],
-        prev_tail: [0.0, 0.0],
-    }; PARTICLE_COUNT];
-    for i in 0..particles.len() {
-        particles[i].pos = [rng.gen_range(-1.0, 1.0), rng.gen_range(-1.0, 1.0)];
-        particles[i].tail = particles[i].pos.clone();
-        particles[i].speed = [rng.gen_range(-0.1, 0.1), rng.gen_range(-0.1, 0.1)];
-    }
-    return particles;
-}
+// fn init_particles_buffer() -> [Particle; PARTICLE_COUNT] {
+//     let mut rng = thread_rng();
+//     let mut particles = [Particle {
+//         pos: [0.0, 0.0],
+//         tail: [0.0, 0.0],
+//         speed: [0.0, 0.0],
+//         prev_pos: [0.0, 0.0],
+//         prev_tail: [0.0, 0.0],
+//     }; PARTICLE_COUNT];
+//     for i in 0..particles.len() {
+//         particles[i].pos = [rng.gen_range(-1.0, 1.0), rng.gen_range(-1.0, 1.0)];
+//         particles[i].tail = particles[i].pos.clone();
+//         particles[i].speed = [rng.gen_range(-0.1, 0.1), rng.gen_range(-0.1, 0.1)];
+//     }
+//     return particles;
+// }
 
 fn window_size_dependent_setup(
     images: &[Arc<SwapchainImage<Window>>], 
