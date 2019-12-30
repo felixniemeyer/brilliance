@@ -6,11 +6,11 @@ layout(location = 0) out vec4 f_color;
 
 layout(push_constant) uniform PushConstantData {
 	int time; 
+	int dtime; 
 } pc;
 
 layout(set = 0, binding = 0) uniform sampler2D tex; 
 
 void main() {
-	
-	f_color = texture(tex, tex_coords + vec2(sin(pc.time*0.001),0)); 
+	f_color = texture(tex, tex_coords) ; 
 }

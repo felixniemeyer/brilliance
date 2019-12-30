@@ -346,6 +346,8 @@ fn main() {
     let mut previous_frame_end = Box::new(sync::now(device.clone()).join(autumn_texture_future)) as Box<dyn GpuFuture>; 
 
     let t0 = time::SystemTime::now(); 
+    let mut now = t0; 
+    let mut then;
 
     loop {
         previous_frame_end.cleanup_finished(); 
@@ -384,8 +386,15 @@ fn main() {
             continue; 
         } // ugly workaround for a situation when image_num is out of bounds
 
+        then = now; 
+        now = time::SystemTime::now();
+
+        let time = now.duration_since(t0).unwrap().as_millis() as i32;
+        let dtime = now.duration_since(then).unwrap().as_millis() as i32;
+
         let push_constants = square_fs::ty::PushConstantData {
-            time: time::SystemTime::now().duration_since(t0).unwrap().as_millis() as i32
+            time,
+            dtime
         };
 
         let clear_values = vec!([0.0, 0.0, 0.0, 1.0].into()); 
